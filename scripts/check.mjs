@@ -31,13 +31,13 @@ for (const name of files) {
   }
 }
 const c = vm.createContext({}); c.window = c;
-for (const name of ['assets', 'animations', 'meme-art', 'stages']) vm.runInContext(fs.readFileSync(path.join(root, name + '.js'), 'utf8'), c);
+for (const name of ['assets', 'animations', 'meme-art', 'stages', 'board-themes']) vm.runInContext(fs.readFileSync(path.join(root, name + '.js'), 'utf8'), c);
 const refs = new Set();
 function collect(value) {
   if (typeof value === 'string' && /\.(png|webp|jpe?g|svg)$/.test(value)) refs.add(value);
   else if (value && typeof value === 'object') Object.values(value).forEach(collect);
 }
-for (const key of ['ASSETS', 'ANIMATIONS', 'MEME_ART', 'STAGES']) collect(c[key]);
+for (const key of ['ASSETS', 'ANIMATIONS', 'MEME_ART', 'STAGES', 'ChessBoards']) collect(c[key]);
 for (const ref of refs) checkRef(path.join(root, 'index.html'), ref);
 const docs = ['README.md', 'CONTRIBUTING.md', 'ASSET_NOTICE.md'].map(name => path.join(root, name)).concat(walk(path.join(root, 'docs')));
 for (const doc of docs) {

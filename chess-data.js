@@ -7,7 +7,7 @@ const previousTiers=[["奶蛙","汤圆","袋鼠","高松灯企鹅","管理员企
 window.CHESS_PREVIOUS_POOL=Object.fromEntries(TURN_ROSTER.map(c=>[c.id,[24,20,18,12,10][previousTiers.findIndex(t=>t.includes(c.name))]]));
 const legacyTiers=[["奶蛙","汤圆","袋鼠","高松灯企鹅","管理员企鹅","说的道理","东雪莲","长崎素世","小松绿","千早爱音","八幡海铃","仲町阿拉蕾","孙笑川","尼古喵喵","耄耋","叮咚鸡"],["奶龙","牛来","牛妈妈","灰泽满","明前奶绿","向晚","李老八","张顺飞","古振兴","若叶睦","阿梓","要乐奈","三角初华","四时小路"],["七海","贝拉","珈乐","嘉然","乃琳","冬马和纱","凑友希那","宫永野乃花","祐天寺若麦","星瞳","高松灯","山泥若"],["电棍","炫狗","峰月律","千石由乃","露早","小木曾雪菜","藤都子","椎名立希","闹吃","踩背象"],["乔希","炫神","永雏塔菲","柚恩","丰川祥子","东北雨姐","薇欧拉","诗歌剧"]];
 window.CHESS_LEGACY_POOL=Object.fromEntries(TURN_ROSTER.map(c=>[c.id,[24,20,18,12,10][legacyTiers.findIndex(t=>t.includes(c.name))]]));
-const roleStats={先锋:[920,53,36,1.12,1],强攻:[700,74,19,.98,1],游击:[640,65,14,.78,2],术士:[700,64,18,1.1,3],控场:[760,55,25,1.08,2],支援:[785,55,24,1.12,3]};
+const roleStats={先锋:[920,53,36,1.12,1],强攻:[700,74,19,.98,1],游击:[660,65,14,.78,1],术士:[680,70,18,1.10,3.2],控场:[745,58,25,1.10,2.4],支援:[745,57,24,1.13,3]};
 const supportSlots={'高松灯企鹅':2,'灰泽满':2,'高松灯':1,'若叶睦':2,'千石由乃':2,'尼古喵喵':2,'奶龙':2,'峰月律':2};
 const traits={
  "先锋": {
@@ -20,7 +20,7 @@ const traits={
    0.06,
    0.1
   ],
-  "text": "基础分工：先锋生命提高6 / 10%"
+  "text": "先锋生命提高6 / 10%"
  },
  "强攻": {
   "steps": [
@@ -32,7 +32,7 @@ const traits={
    0.05,
    0.08
   ],
-  "text": "基础分工：强攻攻击提高5 / 8%"
+  "text": "强攻攻击提高5 / 8%"
  },
  "游击": {
   "steps": [
@@ -44,7 +44,7 @@ const traits={
    0.06,
    0.1
   ],
-  "text": "基础分工：游击攻速提高6 / 10%"
+  "text": "游击攻速提高6 / 10%"
  },
  "术士": {
   "steps": [
@@ -56,7 +56,7 @@ const traits={
    0.08,
    0.12
   ],
-  "text": "基础分工：术士技能伤害提高8 / 12%"
+  "text": "术士技能伤害提高8 / 12%"
  },
  "控场": {
   "steps": [
@@ -68,7 +68,7 @@ const traits={
    6,
    10
   ],
-  "text": "基础分工：控场护甲提高6 / 10"
+  "text": "控场护甲提高6 / 10"
  },
  "支援": {
   "steps": [
@@ -80,7 +80,7 @@ const traits={
    0.08,
    0.12
   ],
-  "text": "基础分工：支援治疗与护盾提高8 / 12%"
+  "text": "支援治疗与护盾提高8 / 12%"
  }
 };
 const relationships=[
@@ -155,5 +155,5 @@ const roster=TURN_ROSTER.map(c=>{
  return {...c,cost,startMana:['术士','支援'].includes(c.role)?30:20,manaHit:['术士','支援'].includes(c.role)?20:16,group:c.original.group,bonds:relationships.filter(g=>g.members.includes(c.name)).map(g=>g.name),hp:Math.round(hp*factor),attack:Math.round(attack*factor),armor,interval,range,skill:{...skill,desc},skills:[c.skills[0],skill]};
 });
 window.CHESS_RELATIONSHIPS=relationships;window.CHESS_ROSTER=roster;window.CHESS_BY_ID=new Map(roster.map(c=>[c.id,c]));
-window.CHESS_RULES={namedAuraLimits:{hp:.24,attack:.24,haste:.18,spell:.28,healing:.24},lightweightText:'梗与团体是主要羁绊，基础分工只提供少量辅助加成。同一成员从关系获得的常驻生命/攻击/治疗加成最多24%，攻速18%，技能伤害28%。整场关系额外回能最多32，实际回复与护盾合计最多最大生命22%；搭档与施法主题各触发一组并共享4 / 6秒冷却，其中回能最多18、回复与护盾最多12%。同名副本共享触发与资源预算，常驻关系属性只由一枚最高星同名棋子领取；复制不增加人数。',relationshipLimits:{energy:32,sustain:.22},lightweightLimits:{energy:18,sustain:.12},pool:[24,20,18,12,10],odds:{3:[75,25,0,0,0],4:[65,28,7,0,0],5:[50,33,15,2,0],6:[30,40,25,5,0],7:[20,30,35,13,2],8:[12,20,28,25,15]},xp:{3:4,4:8,5:16,6:24,7:32},stars:[1,1.7,2.8],traits};
+window.CHESS_RULES={namedAuraLimits:{hp:.24,attack:.24,haste:.18,spell:.28,healing:.24},lightweightText:'同一成员从关系获得的常驻生命/攻击/治疗加成最多24%，攻速18%，技能伤害28%。整场关系额外回能最多32，实际回复与护盾合计最多最大生命22%；搭档与施法主题各触发一组并共享4 / 6秒冷却，其中回能最多18、回复与护盾最多12%。同名副本共享触发与资源预算，常驻关系属性只由一枚最高星同名棋子领取；复制不增加人数。',relationshipLimits:{energy:32,sustain:.22},lightweightLimits:{energy:18,sustain:.12},pool:[24,20,18,12,10],odds:{3:[75,25,0,0,0],4:[65,28,7,0,0],5:[50,33,15,2,0],6:[30,40,25,5,0],7:[20,30,35,13,2],8:[12,20,28,25,15]},xp:{3:4,4:8,5:16,6:24,7:32},stars:[1,1.7,2.8],traits};
 })();

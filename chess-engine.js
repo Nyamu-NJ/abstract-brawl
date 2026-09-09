@@ -20,7 +20,7 @@ class LineupEvaluator{
   const levels=this.groups.map(g=>{const n=popcount(g.mask&identities);let level=0;for(const step of g.steps)if(n>=step)level++;return level;});
   let score=0,front=0,damageRole=0;const profiles=[];
   for(const item of chosen){const {p,c,bit}=item,lead=leaders.get(p.id)===item,key=chosen.length+':'+Number(lead)+':'+item.connections.map(i=>levels[i]).join('');
-   if(c.role==='先锋')front+=1;else if(c.role==='控场')front+=.6;if(['强攻','游击','术士'].includes(c.role))damageRole++;
+   if(c.range<=1)front+=c.role==='先锋'?1.2:c.role==='强攻'?.7:.55;if(['强攻','游击','术士'].includes(c.role))damageRole++;
    const cached=item.cache.get(key);if(cached){score+=cached.scoreValue;if(details)profiles.push(cached);continue;}
    const named={hp:0,attack:0,haste:0,spell:0,healing:0},mods={hp:0,attack:0,armor:0,haste:0,spell:0,healing:0},relations={};let proc=0;
    for(const i of item.connections){const g=this.groups[i],level=levels[i];if(!level)continue;if(g.relationship){relations[g.id]=level;if(lead){for(const [key,values]of g.auraEntries)named[key]+=values[level-1]||0;if(g.category!=='signature')proc+=g.category==='team'?.03+.012*(level-1):g.category==='theme'?.022+.008*(level-1):.014;}}else mods[g.mod]+=g.values[level-1];}
@@ -35,7 +35,7 @@ class LineupEvaluator{
   }
   // An uncovered team pays for losing cast uptime and protection. No reward is
   // granted for bonds held only on the bench or for merely owning many labels.
-  if(chosen.length>=3){score*=1-.055*Math.max(0,Math.min(2,chosen.length/4)-front);if(damageRole===0)score*=.94;}
+  if(chosen.length>=3){score*=1-.075*Math.max(0,Math.min(2.4,chosen.length*.36)-front);if(damageRole===0)score*=.94;}
   return details?{score,profiles,active:this.groups.flatMap((g,i)=>levels[i]?[{...g,level:levels[i]}]:[]),unique:popcount(identities)}:score;
  }
  best(count){count=Math.min(count,this.items.length);let bestMask=0,bestScore=-Infinity,bestUnique=-1,evaluated=0;const total=this.items.length;
@@ -85,7 +85,12 @@ class Tournament{
   if(!choice||choice.key!==key){choice={...new LineupEvaluator(owned).best(p.level),key};this.arrangeCache.set(p.id,choice);}
   const current=new Map(owned.map(u=>[u.uid,u])),selected=choice.chosen.map(u=>current.get(u.uid));
   p.board=Array(24).fill(null);const used=new Set(),frontScore=u=>{const c=D().get(u.id);return c.hp*(1+c.armor/100)*R().stars[u.star-1]*(c.role==='先锋'?1.6:c.role==='控场'?1.15:c.role==='支援'?.5:.75);};
-  selected.sort((a,b)=>frontScore(b)-frontScore(a)||a.uid-b.uid);const slots=[2,3,8,9,14,15,20,21];for(let i=0;i<selected.length;i++)p.board[slots[i]]=selected[i];
+  selected.sort((a,b)=>frontScore(b)-frontScore(a)||a.uid-b.uid);// Spread a screen across the front; leave firing lanes on both wings.
+  const melee=selected.filter(u=>D().get(u.id).range<=1),ranged=selected.filter(u=>D().get(u.id).range>1);
+  const place=(u,slots)=>{const cell=slots.find(i=>!used.has(i));if(cell==null)throw Error('No deployment cell');used.add(cell);p.board[cell]=u;};
+  for(const u of melee){const flanker=D().get(u.id).role==='游击';place(u,flanker?[0,5,1,4,6,11,2,3,7,10,8,9]:[1,4,2,3,0,5,8,9,7,10,6,11]);}
+  ranged.sort((a,b)=>D().get(b.id).range-D().get(a.id).range||frontScore(a)-frontScore(b)||a.uid-b.uid);
+  for(const u of ranged)place(u,D().get(u.id).range>=2.7?[12,17,19,22,13,16,18,23]:[6,11,7,10,8,9,13,16,19,22]);
   p.bench=choice.bench.map(u=>current.get(u.uid));while(p.bench.length<9)p.bench.push(null);
   return {score:choice.score,evaluated:choice.evaluated,unique:choice.unique,relationships:choice.active.filter(g=>g.relationship&&g.category!=='signature').map(g=>g.key)};
  }
@@ -147,11 +152,13 @@ class Tournament{
  }
 }
 class Combat{
- constructor(left,right,seed=1){this.rng=new Random(seed);this.time=0;this.done=false;this.winner=null;this.events=[];this.serial=0;this.pending=[];this.bondOnce=new Set();this.bondCooldown=new Map();this.lastBondCaster=new Map();this.bounds={minX:0,maxX:5,minY:0,maxY:7};this.units=[];[left,right].forEach((p,side)=>{const profiles=lineupProfiles(p.board).profiles;for(const profile of profiles){const piece=profile.piece,c=profile.data,cell=p.board.findIndex(u=>u?.uid===piece.uid);this.units.push({...piece,uid:side+':'+piece.uid,side,data:c,x:side?5-cell%6:cell%6,y:side?3-Math.floor(cell/6):4+Math.floor(cell/6),relations:profile.relations,relationLead:profile.relationLead,namedAura:profile.namedAura,radius:.30,moveSpeed:1.85,vx:0,vy:0,pushX:0,pushY:0,moving:false,facing:side?-1:1,hp:profile.hp,maxHp:profile.hp,attack:profile.attack,armor:profile.armor,interval:profile.interval,range:c.range,spell:profile.spell,healing:profile.healing,mana:c.startMana,manaHit:c.manaHit,regen:0,cooldown:.2+this.rng.next()*.35,moveCD:0,shield:0,slow:0,burn:0,stun:0,buff:0,form:null,formTime:0,action:null,damage:0,healed:0});}});this.regenAt=6;for(const u of this.units){this.lightweightState(u);this.relationshipState(u);u.mana=u.data.startMana;u.manaHit=u.data.manaHit;if(u.relations.yumemita)this.bondEnergy(u,[10,18][u.relations.yumemita-1]);}
+ constructor(left,right,seed=1){this.rng=new Random(seed);this.time=0;this.done=false;this.winner=null;this.events=[];this.serial=0;this.pending=[];this.bondOnce=new Set();this.bondCooldown=new Map();this.lastBondCaster=new Map();this.bounds={minX:0,maxX:5,minY:0,maxY:7};this.units=[];[left,right].forEach((p,side)=>{const profiles=lineupProfiles(p.board).profiles;for(const profile of profiles){const piece=profile.piece,c=profile.data,cell=p.board.findIndex(u=>u?.uid===piece.uid);this.units.push({...piece,uid:side+':'+piece.uid,side,data:c,x:side?5-cell%6:cell%6,y:side?3-Math.floor(cell/6):4+Math.floor(cell/6),relations:profile.relations,relationLead:profile.relationLead,namedAura:profile.namedAura,radius:.30,moveSpeed:c.range>1?1.65:2.05,vx:0,vy:0,pushX:0,pushY:0,moving:false,facing:side?-1:1,hp:profile.hp,maxHp:profile.hp,attack:profile.attack,armor:profile.armor,interval:profile.interval,range:c.range,spell:profile.spell,healing:profile.healing,mana:c.startMana,manaHit:c.manaHit,regen:0,cooldown:.2+this.rng.next()*.35,moveCD:0,shield:0,slow:0,burn:0,stun:0,buff:0,form:null,formTime:0,action:null,damage:0,healed:0});}});this.regenAt=6;for(const u of this.units){this.lightweightState(u);this.relationshipState(u);u.mana=u.data.startMana;u.manaHit=u.data.manaHit;if(u.relations.yumemita)this.bondEnergy(u,[10,18][u.relations.yumemita-1]);}
  }
  alive(side){return this.units.filter(u=>u.hp>0&&(side==null||u.side===side));}unit(uid){return this.units.find(u=>u.uid===uid);}distance(a,b){return Math.hypot((a.x-b.x)*1.2,(a.y-b.y)*.74);}
- attackReach(a,b){return (a.radius??.3)+(b.radius??.3)+.10;}
- hitReach(a,b){return this.attackReach(a,b)+.24;}
+ meleeReach(a,b){return (a.radius??.3)+(b.radius??.3)+.10;}
+ attackReach(a,b){return a.range>1?a.range:this.meleeReach(a,b);}
+ hitReach(a,b){return this.meleeReach(a,b)+.24;}
+ castReach(u,s,target){return s.target!=='enemy'?Infinity:s.melee?this.meleeReach(u,target):Math.max(2.6,this.attackReach(u,target)+.45);}
  emit(e){this.events.push({time:this.time,...e});if(this.events.length>180)this.events.splice(0,60);}
  damage(a,t,n,kind='hit',physical=kind==='hit'){if(t.hp<=0)return 0;const overtime=this.time>30?1+(this.time-30)*.15:1;let amount=Math.max(kind==='burn'?0:1,n*100/(100+t.armor)*overtime),absorbed=Math.min(t.shield,amount);t.shield-=absorbed;amount-=absorbed;const actual=Math.min(t.hp,amount);t.hp=Math.max(0,t.hp-amount);if(t.hp<=0&&t.deathAt==null)t.deathAt=this.time;if(kind!=='burn')t.mana=Math.min(100,t.mana+Math.min(10,4+actual/t.maxHp*30));a.damage+=actual;if(kind!=='burn')t.hurtAt=this.time;if(physical){const dx=(t.x-a.x)*1.2,dy=(t.y-a.y)*.74,d=Math.hypot(dx,dy)||1;t.pushX=(t.pushX||0)+dx/d*(kind==='hit'?.8:1.3);t.pushY=(t.pushY||0)+dy/d*(kind==='hit'?.8:1.3);}this.emit({type:kind,actor:a.uid,target:t.uid,amount:Math.round(actual)});if(t.hp>0)this.onBondHit(t,kind);return actual;}
  heal(a,t,n){const amount=Math.min(t.maxHp-t.hp,n*a.healing*(this.time>30?.4:1));t.hp+=amount;a.healed+=amount;this.emit({type:'heal',actor:a.uid,target:t.uid,amount:Math.round(amount)});}
@@ -237,13 +244,13 @@ class Combat{
   }
   this.onLightweightCast(u);
  }
- target(u){const enemies=this.alive(1-u.side);return enemies.sort((a,b)=>this.distance(u,a)-this.distance(u,b)||a.hp/a.maxHp-b.hp/b.maxHp)[0];}
+ target(u){const enemies=this.alive(1-u.side),current=this.unit(u.targetId);if(current?.hp>0&&current.side!==u.side&&this.distance(u,current)<=this.attackReach(u,current)+.12)return current;const target=enemies.sort((a,b)=>this.distance(u,a)-this.distance(u,b)||a.hp/a.maxHp-b.hp/b.maxHp||a.uid.localeCompare(b.uid))[0];u.targetId=target?.uid;return target;}
  clampUnit(u){u.x=clamp(u.x,this.bounds.minX,this.bounds.maxX);u.y=clamp(u.y,this.bounds.minY,this.bounds.maxY);}
- approach(u,target,dt){
+ approach(u,target,dt,reach=this.attackReach(u,target)){
   let dx=(target.x-u.x)*1.2,dy=(target.y-u.y)*.74,d=Math.hypot(dx,dy)||1,nx=dx/d,ny=dy/d;
   // Tangential steering lets the rear line go around occupied contact points.
   for(const v of this.alive()){if(v===u||v===target)continue;const ox=(v.x-u.x)*1.2,oy=(v.y-u.y)*.74,od=Math.hypot(ox,oy);if(od<1.10&&od>.001&&(ox*nx+oy*ny)/od>.35){const cross=nx*oy-ny*ox,sign=Math.abs(cross)>.04?-Math.sign(cross):u.uid.localeCompare(v.uid)>0?1:-1,weight=(1.10-od)*1.25;dx=nx-ny*sign*weight;dy=ny+nx*sign*weight;const length=Math.hypot(dx,dy);nx=dx/length;ny=dy/length;}}
-  const speed=u.moveSpeed*(u.slow>0?.73:1),travel=Math.min(speed*dt,Math.max(0,d-this.attackReach(u,target)+.025));
+  const speed=u.moveSpeed*(u.slow>0?.73:1),travel=Math.min(speed*dt,Math.max(0,d-reach+.025));
   u.vx=nx*travel/dt;u.vy=ny*travel/dt;u.moving=travel>.001;if(Math.abs(nx)>.1)u.facing=nx>0?1:-1;u.x+=nx*travel/1.2;u.y+=ny*travel/.74;this.clampUnit(u);
  }
  collisions(){
@@ -260,7 +267,7 @@ class Combat{
   return u.queuedSkill;
  }
  cast(u,target,prepared=this.prepareSkill(u)){
-  const {skill:s,origin}=prepared;if(s.melee&&this.distance(u,target)>this.attackReach(u,target))return false;u.queuedSkill=null;
+  const {skill:s,origin}=prepared;if(this.distance(u,target)>this.castReach(u,s,target))return false;u.queuedSkill=null;
   const allies=this.alive(u.side),enemies=this.alive(1-u.side);let targets;
   if(s.target==='self')targets=[u];else if(s.target==='ally'){const eligible=s.grantEnergy&&allies.length>1?allies.filter(a=>a!==u):allies;targets=[...eligible].sort((a,b)=>s.grantEnergy?a.mana-b.mana:a.hp/a.maxHp-b.hp/b.maxHp).slice(0,s.area==='all'?eligible.length:s.area==='row'?2:1);}else{targets=[target];if(s.area!=='single')targets=[...enemies].sort((a,b)=>this.distance(a,target)-this.distance(b,target)).slice(0,s.area==='all'?enemies.length:3);}
   u.mana=0;u.cooldown=u.interval+.4;u.action={time:this.time,index:s.sourceIndex,source:s.source,origin,serial:++this.serial,targets:targets.map(t=>t.uid),skill:s,duration:.95,impact:.38,lead:s.melee?.1:0};u.lockUntil=this.time+.78;this.emit({type:'cast',actor:u.uid,name:s.name,origin,skill:s,targets:targets.map(t=>t.uid)});
@@ -279,7 +286,7 @@ class Combat{
   const due=this.pending.filter(p=>p.at<=this.time+1e-9);this.pending=this.pending.filter(p=>p.at>this.time+1e-9);
   for(const p of due){const u=this.unit(p.actor);if(!u||u.hp<=0)continue;
    if(p.kind==='skill')this.resolveSkill(u,p.skill,p.targets,p.focus||0);
-   else{const target=this.unit(p.target);if(!target||target.hp<=0||this.distance(u,target)>this.hitReach(u,target))continue;this.damage(u,target,p.amount);u.mana=Math.min(100,u.mana+u.manaHit);if(u.relations.mygo)this.bondEnergy(u,[2,3][u.relations.mygo-1]);}
+   else{const target=this.unit(p.target);if(!target||target.hp<=0||(!p.ranged&&this.distance(u,target)>this.hitReach(u,target)))continue;this.damage(u,target,p.amount,'hit',!p.ranged);u.mana=Math.min(100,u.mana+u.manaHit);if(u.relations.mygo)this.bondEnergy(u,[2,3][u.relations.mygo-1]);}
   }
  }
  step(dt=.05){if(this.done)return;dt=clamp(dt,.001,.1);
@@ -291,8 +298,8 @@ class Combat{
    if(u.hp<=0||u.stun>0||this.time<(u.lockUntil||0)-1e-9)continue;const target=this.target(u);if(!target)break;
    const dx=target.x-u.x;if(Math.abs(dx)>.03)u.facing=Math.sign(dx);
    const prepared=u.mana>=100?this.prepareSkill(u):null,reach=this.attackReach(u,target);
-   if(prepared&&u.cooldown<=0&&(!prepared.skill.melee||this.distance(u,target)<=reach)){this.cast(u,target,prepared);continue;}
-   if(this.distance(u,target)<=reach){if(u.cooldown<=0){u.cooldown=u.interval*(u.slow>0?1.35:1)/(u.buff>0?1.12:1)/(u.lightHaste>0?1+(u.lightHasteRate||0):1);u.action={time:this.time,index:u.data.skills[0].sourceIndex,source:u.data.skills[0].source,origin:u.data.id,serial:++this.serial,targets:[target.uid],normal:true,duration:.68,impact:.28,lead:.06};u.lockUntil=this.time+.58;this.pending.push({at:this.time+.28,kind:'normal',actor:u.uid,target:target.uid,amount:u.attack*(u.buff>0?1.15:1)*(u.weaken>0?.82:1)*(1+(u.bondPunch||0))});u.bondPunch=0;}}
+   if(prepared&&u.cooldown<=0){const castReach=this.castReach(u,prepared.skill,target);if(this.distance(u,target)<=castReach){this.cast(u,target,prepared);continue;}this.approach(u,target,dt,castReach);continue;}
+   if(this.distance(u,target)<=reach){if(u.cooldown<=0){u.cooldown=u.interval*(u.slow>0?1.35:1)/(u.buff>0?1.12:1)/(u.lightHaste>0?1+(u.lightHasteRate||0):1);const ranged=u.range>1,impact=.28+(ranged?Math.min(.3,this.distance(u,target)/11):0);u.action={time:this.time,index:u.data.skills[0].sourceIndex,source:u.data.skills[0].source,origin:u.data.id,serial:++this.serial,targets:[target.uid],normal:true,ranged,duration:Math.max(.68,impact+.18),impact,lead:.06};u.lockUntil=this.time+.58;this.pending.push({at:this.time+impact,kind:'normal',ranged,actor:u.uid,target:target.uid,amount:u.attack*(u.buff>0?1.15:1)*(u.weaken>0?.82:1)*(1+(u.bondPunch||0))});u.bondPunch=0;}}
    else this.approach(u,target,dt);
   }
   this.collisions();

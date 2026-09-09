@@ -5,11 +5,11 @@ const physicalTypes=new Set(['light','heavy','dash','upper','slam','grab']);
 class Renderer{
  constructor(canvas,art){this.canvas=canvas;this.ctx=canvas.getContext('2d');this.art=art;this.background=null;this.battle=null;this.prep=[];this.time=0;this.clock=0;this.selected=null;this.lastBattle=null;this.finishedAt=null;this.onMissing=null;}
  setPrep(p,scout){this.battle=null;this.lastBattle=null;this.finishedAt=null;this.prep=[];[p,scout].forEach((player,side)=>{if(!player)return;player.board.forEach((u,cell)=>{if(u)this.prep.push({...u,data:CHESS_BY_ID.get(u.id),side,x:side?5-cell%6:cell%6,y:side?3-Math.floor(cell/6):4+Math.floor(cell/6),hp:1,maxHp:1,mana:0});});});}
- home(u){return {x:250+u.x*120,y:122+u.y*74};}
+ home(u){return {x:300+u.x*100,y:151+u.y*62};}
  get combatTime(){return this.battle?.done?this.clock:(this.battle?.time??this.time);}
  ground(u){const now=this.home(u);if(!this.battle||!u.previous||this.battle.done)return now;const old=this.home(u.previous),t=this.alpha??1;return {x:old.x+(now.x-old.x)*t,y:old.y+(now.y-old.y)*t};}
  age(u){return this.combatTime-(u.action?.time??-20);}
- melee(u,a=u.action){return !!a&&(a.normal||!!a.skill?.power&&(a.skill.melee||a.source.physical||physicalTypes.has(a.source.type)));}
+ melee(u,a=u.action){return !!a&&((a.normal&&!a.ranged)||!a.normal&&!!a.skill?.power&&(a.skill.melee||a.source.physical||physicalTypes.has(a.source.type)));}
  direction(u){return u.facing??(u.side?-1:1);}
  pose(u){const p=this.ground(u),a=u.action,age=this.age(u);if(this.battle&&u.hp>0&&!u.moving&&a&&this.melee(u)&&age>=0&&age<(a.duration||.8)){const t=age/(a.duration||.8);p.x+=this.direction(u)*Math.sin(t*Math.PI)*7;}return p;}
  actor(u){const a=u.action,age=this.battle?this.age(u):20,duration=a?.duration||.8;let data=u.data;
@@ -44,11 +44,8 @@ class Renderer{
   // A frame always begins from a clean canvas transform, including after loading failures.
   c.setTransform(1,0,0,1,0,0);c.globalAlpha=1;c.filter='none';c.shadowBlur=0;c.clearRect(0,0,1100,740);c.imageSmoothingEnabled=false;
   c.save();try{
-   if(this.background)c.drawImage(this.background,0,0,1100,740);c.fillStyle=b?'#08142335':'#09182266';c.fillRect(0,0,1100,740);
-   {for(let y=0;y<8;y++)for(let x=0;x<6;x++){const p=this.home({x,y});c.fillStyle=y<4?(x+y)%2?'#473a4855':'#6b566055':(x+y)%2?'#365c5755':'#55817655';c.strokeStyle='#cad9bd44';c.lineWidth=1;c.fillRect(p.x-58,p.y-43,116,72);c.strokeRect(p.x-58,p.y-43,116,72);}
-    c.strokeStyle='#e7d29399';c.setLineDash([10,9]);c.beginPath();c.moveTo(190,374);c.lineTo(910,374);c.stroke();c.setLineDash([]);
-   }
-   c.textAlign='left';c.font='bold 19px Microsoft YaHei';c.fillStyle=b?'#bdeed2':'#f2ced5';c.fillText(b?'我方 · '+b.alive(0).length+' 人':'侦察阵容',35,40);c.textAlign='right';c.fillStyle=b?'#f0b3c7':'#bfe8cc';c.fillText(b?'对手 · '+b.alive(1).length+' 人':'下半场 · 我方部署区',1065,b?40:704);
+   ChessBoards.draw(c,this.theme||ChessBoards.themes[0]);
+   c.textAlign='left';c.font='bold 19px Microsoft YaHei';c.fillStyle=b?'#bdeed2':'#f2ced5';c.fillText(this.showcase?'':b?'我方 · '+b.alive(0).length+' 人':'侦察阵容',35,40);c.textAlign='right';c.fillStyle=b?'#f0b3c7':'#bfe8cc';c.fillText(this.showcase?'':b?'对手 · '+b.alive(1).length+' 人':'下半场 · 我方部署区',1065,b?40:704);
    if(b){c.textAlign='center';c.fillStyle='#fbebc4';c.font='bold 18px Microsoft YaHei';c.fillText(b.done?(b.winner===0?'胜利':b.winner===1?'本轮落败':'平局'):Math.max(0,Math.ceil(45-b.time))+' 秒',550,703);}
    const positions=new Map(units.map(u=>[u.uid,this.pose(u)]));
    for(const u of [...units].sort((a,z)=>positions.get(a.uid).y-positions.get(z.uid).y||a.side-z.side)){
@@ -79,6 +76,7 @@ class Renderer{
    const x=start.x+(end.x-start.x)*phase,y=start.y-75+(end.y-start.y)*phase-(s.type==='throw'?Math.sin(phase*Math.PI)*78:0);
    if(!a.normal&&s.summonId!=null){const summoned=CHESS_BY_ID.get(s.summonId);if(summoned){const f={data:summoned.original,hp:1,y:443,vy:0,walk:1,facing:dir,animTime:age*2};if(this.drawFighter(f,.95,x,y+65,.62))continue;}}
    const fx=s.sequence?.[Math.floor(t*8)%s.sequence.length]||s.fx;let painted=false;if(!a.normal&&!s.noIcons&&fx)painted=MemeVisuals.sprite(c,fx,x,y,104,age,dir,.98,false);
+   if(a.ranged){c.save();c.strokeStyle='#ffe5a5';c.lineWidth=4;c.beginPath();c.moveTo(x-dir*19,y+4);c.lineTo(x,y);c.stroke();c.fillStyle='#fff5d0';c.fillRect(x-3,y-3,6,6);c.restore();continue;}
    if(!painted){c.strokeStyle=a.normal?'#eedca7':'#94eafa';c.lineWidth=a.normal?3:5;c.beginPath();c.arc(x,y,a.normal?8:23,dir>0?-1.1:Math.PI-1.1,dir>0?1.1:Math.PI+1.1);c.stroke();}
   }
  }

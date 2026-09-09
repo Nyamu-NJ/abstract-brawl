@@ -11,5 +11,5 @@ export function walk(dir) {
 }
 export function runtimeFiles() {
   const top = fs.readdirSync(root).filter(name => /\.(html|css|js)$/.test(name));
-  return [...top, ...['assets', 'raster', 'stages'].flatMap(dir => walk(path.join(root, dir)).map(p => path.relative(root, p)))].sort();
+  return [...top, ...['assets', 'raster', 'stages', 'chess-scenes'].flatMap(dir => walk(path.join(root, dir)).map(p => path.relative(root, p)))].sort();
 }

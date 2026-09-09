@@ -17,9 +17,12 @@
 | 自走棋费档、羁绊与招牌 | `chess-data.js` |
 | 自走棋经济、AI、布阵与战斗 | `chess-engine.js` |
 | 自走棋拖放、画面与界面 | `chess-placement.js`、`chess-renderer.js`、`chess-ui.js`、`chess.css` |
+| 自走棋开始页与存档阵容展示 | `chess.html`、`start-screen.css`、`chess-ui.js` |
+| 自走棋专用场景、透明格线 | `board-themes.js`、`chess-scenes/` |
+| 自走棋角色动画资源加载 | `character-art.js` |
 | 动作索引和播放 | `animations.js`、`animation-player.js` |
 | 图片索引 | `assets.js`、`assets/`、`raster/` |
-| 场景 | `stages.js`、`stages/` |
+| 格斗与回合战场景 | `stages.js`、`stages/` |
 | 格斗音乐 / 其他模式音乐 | `music.js` / `mode-music.js` |
 
 ## 角色和兼容性
@@ -30,7 +33,9 @@
 
 `AbstractChess.LineupEvaluator` 同时计算真实战斗常驻属性与综合布阵的估值。只统计场上不同角色；同名角色常驻关系加成仅由最高星副本领取。不要在 UI 里另写一套不一致的羁绊规则。
 
-`tests/context.cjs` 在 Node VM 中按游戏依赖顺序加载纯规则。当前测试包含技能资源上限、2992、同名共享、穷举布阵和缓存等价性；没有模拟真实手机 GPU、浏览器布局或触控手感。
+`tests/context.cjs` 在 Node VM 中按游戏依赖顺序加载纯规则。测试覆盖技能资源上限、关系触发、同名共享、穷举布阵、缓存等价性、远程攻击和完整赛事卡池守恒。`tests/ui-fixture.cjs` 提供轻量 DOM 模拟，检查开始页、存档恢复、首轮结算、场景切换和布阵格子坐标；没有模拟真实手机 GPU、浏览器布局或触控手感。
+
+自走棋使用 `abstract-autochess-run-v1` 保存赛事，开始页只读取未结束赛事中的玩家棋盘。旧场景 ID 不属于当前六种棋盘时回退为随机，角色和经济状态仍保留。新增自走棋场景应加入 `board-themes.js` 与 `chess-scenes/`，不要写入其他模式的 `stages.js`；打包脚本和图片检查已包含这个资源目录。
 
 ## 本地和打包
 
