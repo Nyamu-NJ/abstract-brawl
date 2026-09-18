@@ -193,6 +193,7 @@ class NetClient {
       case 'pause': this.status('房主已暂停'); if (typeof syncMusic === 'function') syncMusic(); break;
       case 'resume': this.clearStatus(); if (typeof syncMusic === 'function') syncMusic(); break;
       case 'rematch': this.onRematch(); break;
+      case 'back': this.onPeerBack(); break;
       case 'leave': this.abort('对手已离开'); break;
     }
   }
@@ -500,11 +501,19 @@ class NetClient {
     this.clearStatus();
   }
   onBack() {
-    // Leaving the battle returns to selection; net mode keeps the room for a
-    // fresh pick round only when both sides did the same (guest back also
-    // leaves the room for simplicity).
-    if (this.connected) this.leave();
-    else this.reset();
+    // Returning to selection keeps the room alive so both players can swap
+    // characters and start a new match without recreating or rejoining.
+    if (!this.connected) { this.reset(); return; }
+    if (this.inMatch) this.send({ t: 'back' });
+    this.resetMatch();
+    this.storeJoin(); // now a lobby session: no page-reload resume
+    this.status('已返回选人 · 房间 ' + this.room + ' 仍保留 · 双方重新选人后点开打');
+  }
+  onPeerBack() {
+    // The opponent returned to selection: reset and follow them there.
+    this.resetMatch();
+    if (typeof goBack === 'function') { try { goBack(); } catch { /* already at selection */ } }
+    this.status('双方已返回选人 · 房间 ' + this.room + ' 仍保留 · 重新选人后点开打');
   }
   abort(msg) {
     this.status(msg, 'error');
@@ -516,19 +525,25 @@ class NetClient {
     }
   }
   reset() {
+    this.resetMatch();
+    this.connected = false;
+    this.peerOnline = false;
+    this.reconnectTries = 0;
+    clearTimeout(this.reconnectTimer);
+  }
+  /* Match-level state only; the room connection is kept. */
+  resetMatch() {
     this.inMatch = false;
     this.hostReady = this.guestReady = false;
     this.sentReady = false;
     this.myRematch = this.peerRematch = false;
-    this.connected = false;
-    this.peerOnline = false;
-    this.hashes.clear();
-    this.reconnectTries = 0;
-    this.lastHashOk = true;
     this.exchanged = false;
-    clearTimeout(this.reconnectTimer);
+    this.lastHashOk = true;
+    this.hashes.clear();
     clearInterval(this.stallTimer);
+    this.stallTimer = null;
     clearInterval(this.rejoinTimer);
+    this.rejoinTimer = null;
   }
 }
 window.NetClient = NetClient;

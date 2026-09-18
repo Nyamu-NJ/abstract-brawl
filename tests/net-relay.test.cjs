@@ -147,6 +147,13 @@ function makeContext(port) {
   ok(!!guest3.currentGame, 'stale slot was taken over and the match resumed (after ' + guest3.netGuest3.reconnectTries + ' retries)');
   ok(guest3.currentGame.stateHash() === hostGame.stateHash(), 'takeover restore matches the host exactly');
 
+  /* ---- returning to selection keeps the room alive for a rematch ---- */
+  vm.runInContext('netHost.onBack();', host);
+  for (let i = 0; i < 100 && guest3.netGuest3.inMatch; i++) await sleep(10);
+  ok(!host.netHost.inMatch && !guest3.netGuest3.inMatch, 'back returns both sides to the lobby');
+  ok(host.netHost.connected && guest3.netGuest3.connected, 'room stays alive after reselect');
+  ok(host.netHost.room === room, 'same room code kept');
+
   relay.close();
   console.log('net-relay: ' + checks + ' checks passed.');
   process.exit(0);
